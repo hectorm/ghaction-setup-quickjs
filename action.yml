@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: "Setup QuickJS"
+description: "Setup QuickJS"
+inputs:
+  quickjs-version:
+    description: "QuickJS version"
+    required: true
+    default: "2024-01-13"
+runs:
+  using: "composite"
+  steps:
+    - shell: "sh"
+      env:
+        QUICKJS_VERSION: "${{ inputs.quickjs-version }}"
+      run: |
+        set -eu
+
+        if [ "${QUICKJS_VERSION:?}" = "latest" ]; then
+            QUICKJS_VERSION=$(curl -fsS --proto '=https' --globoff \
+            --url 'https://bellard.org/quickjs/binary_releases/LATEST.json' \
+            | jq -r '.version')
+        fi
+
+        printf '%s\n' "Downloading QuickJS ${QUICKJS_VERSION:?}..."
+        curl -fsS --proto '=https' --globoff \
+            --url "https://bellard.org/quickjs/binary_releases/quickjs-cosmo-${QUICKJS_VERSION:?}.zip" \
+            --output "${RUNNER_TEMP:?}/quickjs-cosmo-${QUICKJS_VERSION:?}.zip"
+
+        QUICKJS_HOME="${HOME:?}"/.quickjs && mkdir -p "${QUICKJS_HOME:?}"
+        unzip -qj "${RUNNER_TEMP:?}/quickjs-cosmo-${QUICKJS_VERSION:?}.zip" qjs -d "${QUICKJS_HOME:?}"
+
+        if [ "${RUNNER_OS:?}" = 'Windows' ]; then
+          mv "${QUICKJS_HOME:?}"/qjs "${QUICKJS_HOME:?}"/qjs.exe
+          printf '%s\r\n' '@echo off' '"%~dp0\qjs.exe" %*' > "${QUICKJS_HOME:?}"/qjs.cmd
+        elif [ "${RUNNER_OS:?}" = 'Linux' ]; then
+          sh "${QUICKJS_HOME:?}"/qjs --assimilate
+        fi
+
+        if [ "${RUNNER_OS:?}" = 'Windows' ]; then
+          printf '%s\n' "${QUICKJS_HOME:?}" | sed -e 's|/|\\|g;s|^\\\(.\)|\1:|' >> "${GITHUB_PATH:?}"
+        else
+          printf '%s\n' "${QUICKJS_HOME:?}" >> "${GITHUB_PATH:?}"
+        fi
